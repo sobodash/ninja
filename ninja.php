@@ -1,5 +1,5 @@
 #!/usr/bin/php -q
-<?php
+<?
 /*
 
 NINJA
@@ -7,7 +7,7 @@ NINJA
 Patching system that creates format independent patches for ROM images of
 various video game consoles.
 
-Version:   1.01
+Version:   1.2
 Author:    Derrick Sobodash <derrick@sobodash.com>
 Copyright: (c) 2004, 2012 Derrick Sobodash
 Web site:  https://github.com/sobodash/ninja/
@@ -16,7 +16,7 @@ License:   BSD License <http://opensource.org/licenses/bsd-license.php>
 */
 
 error_reporting (E_WARNING | E_PARSE);
-$version = "1.01";
+$version = "1.2";
 echo ("\nNINJA v$version (cli)\nCopyright (c) 2004, 2012 Derrick Sobodash\n");
 set_time_limit(6000000);
 
@@ -142,10 +142,6 @@ elseif ($mode=="-p") {
 else die(print "ERROR: The program just ate a frisbee\n");
 exit;
 
-function getmicrotime(){ 
-  list($usec, $sec) = explode(" ",microtime()); 
-  return ((float)$usec + (float)$sec); 
-}
 
 function textualpatch($format, $source, $modified, $outfile, $compressed) {
   global $extra_info, $version;
@@ -218,28 +214,54 @@ function textualpatch($format, $source, $modified, $outfile, $compressed) {
     $pointer = 0;
     $running_patch = "";
     print "Creating the patch...";
-    while($pointer<strlen($srcfile)) {
-      $src_chunk = substr($srcfile, $pointer, 0x200);
-      $mod_chunk = substr($modfile, $pointer, 0x200);
-      if($src_chunk != $mod_chunk) {
-        if($srcfile[$pointer] != $modfile[$pointer]) {
-          $offset = dechex($pointer);
-          $patch = "";
-          while($srcfile[$pointer] != $modfile[$pointer]) {
-            $patch.= $modfile[$pointer];
-            $pointer++;
+    if(strlen($srcfile)<=strlen($modfile)) {
+      while($pointer<strlen($srcfile)) {
+        $src_chunk = substr($srcfile, $pointer, 0x200);
+        $mod_chunk = substr($modfile, $pointer, 0x200);
+        if($src_chunk != $mod_chunk) {
+          if($srcfile[$pointer] != $modfile[$pointer]) {
+            $offset = dechex($pointer);
+            $patch = "";
+            while($srcfile[$pointer] != $modfile[$pointer]) {
+              $patch.= $modfile[$pointer];
+              $pointer++;
+            }
+            $running_patch.= $offset . " " . bin2hex($patch) . "\n";
           }
-          $running_patch.= $offset . " " . bin2hex($patch) . "\n";
+          else
+            $pointer++;
         }
         else
-          $pointer++;
+          $pointer = $pointer + 0x200;
       }
-      else
-        $pointer = $pointer + 0x200;
+      if(strlen($modfile)>strlen($srcfile)) {
+        $offset = dechex($pointer);
+        $running_patch.= $offset . " " . bin2hex(substr($modfile, $pointer, (strlen($modfile)-$pointer))) . "\n";
+      }
     }
-    if(strlen($modfile)>strlen($srcfile)) {
-      $offset = dechex($pointer);
-      $running_patch.= $offset . " " . bin2hex(substr($modfile, $pointer, (strlen($modfile)-$pointer))) . "\n";
+    else {
+      while($pointer<strlen($modfile)) {
+        $src_chunk = substr($srcfile, $pointer, 0x200);
+        $mod_chunk = substr($modfile, $pointer, 0x200);
+        if($src_chunk != $mod_chunk) {
+          if($srcfile[$pointer] != $modfile[$pointer]) {
+            $offset = dechex($pointer);
+            $patch = "";
+            while($srcfile[$pointer] != $modfile[$pointer]) {
+              $patch.= $modfile[$pointer];
+              $pointer++;
+            }
+            $running_patch.= $offset . " " . bin2hex($patch) . "\n";
+          }
+          else
+            $pointer++;
+        }
+        else
+          $pointer = $pointer + 0x200;
+      }
+      if(strlen($modfile)<strlen($srcfile)) {
+        $running_patch.= "cut " . dechex($pointer) . "\n";
+      }
     }
     $running_patch = trim($running_patch);
     print " done!\nWriting patch to $outfile...\n";
@@ -256,31 +278,60 @@ function textualpatch($format, $source, $modified, $outfile, $compressed) {
     $pointer = 0;
     $running_patch = "";
     print "Creating the patch...";
-    while($pointer<filesize($source)) {
-      $src_chunk = fread($source_stream, 0x200);
-      $mod_chunk = fread($modified_stream, 0x200);
-      if($src_chunk != $mod_chunk) {
-      	$chunkpoint = 0;
-        while($chunkpoint < strlen($src_chunk)) {
-          if($src_chunk[$chunkpoint] != $mod_chunk[$chunkpoint]) {
-            $offset = dechex($pointer+$chunkpoint);
-            $patch = "";
-            while($src_chunk[$chunkpoint] != $mod_chunk[$chunkpoint]) {
-              $patch.= $mod_chunk[$chunkpoint];
-              $chunkpoint++;
+    if(filesize($source)<=filesize($modified)) {
+      while($pointer<filesize($source)) {
+        $src_chunk = fread($source_stream, 0x200);
+        $mod_chunk = fread($modified_stream, 0x200);
+        if($src_chunk != $mod_chunk) {
+          $chunkpoint = 0;
+          while($chunkpoint < strlen($src_chunk)) {
+            if($src_chunk[$chunkpoint] != $mod_chunk[$chunkpoint]) {
+              $offset = dechex($pointer+$chunkpoint);
+              $patch = "";
+              while($src_chunk[$chunkpoint] != $mod_chunk[$chunkpoint]) {
+                $patch.= $mod_chunk[$chunkpoint];
+                $chunkpoint++;
+              }
+              $running_patch.= $offset . " " . bin2hex($patch) . "\n";
             }
-            $running_patch.= $offset . " " . bin2hex($patch) . "\n";
+            else
+              $chunkpoint++;
           }
-          else
-            $chunkpoint++;
         }
+        else
+          $pointer = $pointer + 0x200;
       }
-      else
-        $pointer = $pointer + 0x200;
+      if(filesize($modified)>filesize($source)) {
+        $offset = dechex($pointer);
+        $running_patch.= $offset . " " . bin2hex(fread($modified_stream, filesize($modified)-$pointer)) . "\n";
+      }
     }
-    if(filesize($modified)>filesize($source)) {
-      $offset = dechex($pointer);
-      $running_patch.= $offset . " " . bin2hex(fread($modified_stream, filesize($modified)-$pointer)) . "\n";
+    else {
+      while($pointer<filesize($modified)) {
+        $src_chunk = fread($source_stream, 0x200);
+        $mod_chunk = fread($modified_stream, 0x200);
+        if($src_chunk != $mod_chunk) {
+          $chunkpoint = 0;
+          while($chunkpoint < strlen($src_chunk)) {
+            if($src_chunk[$chunkpoint] != $mod_chunk[$chunkpoint]) {
+              $offset = dechex($pointer+$chunkpoint);
+              $patch = "";
+              while($src_chunk[$chunkpoint] != $mod_chunk[$chunkpoint]) {
+                $patch.= $mod_chunk[$chunkpoint];
+                $chunkpoint++;
+              }
+              $running_patch.= $offset . " " . bin2hex($patch) . "\n";
+            }
+            else
+              $chunkpoint++;
+          }
+        }
+        else
+          $pointer = $pointer + 0x200;
+      }
+      if(filesize($modified)<filesize($source)) {
+        $running_patch.= "cut " . dechex($pointer) . "\n";
+      }
     }
     fclose($source_stream);
     fclose($modified_stream);
@@ -294,6 +345,7 @@ function textualpatch($format, $source, $modified, $outfile, $compressed) {
   print "All done!\n";
   exit;
 }
+
 
 function binarypatch($format, $source, $modified, $outfile, $compressed) {
   global $extra_info;
@@ -366,52 +418,103 @@ function binarypatch($format, $source, $modified, $outfile, $compressed) {
     $pointer = 0;
     $running_patch = "";
     print "Creating the patch...";
-    while($pointer<strlen($srcfile)) {
-      $src_chunk = substr($srcfile, $pointer, 0x200);
-      $mod_chunk = substr($modfile, $pointer, 0x200);
-      if($src_chunk != $mod_chunk) {
-        if($srcfile[$pointer] != $modfile[$pointer]) {
-          $offset = dechex($pointer);
-          if(strlen($offset) % 2 != 0)
-            $offset = pack("H*", str_pad($offset, strlen($offset)+1, "0", STR_PAD_LEFT));
-          else
-           $offset = pack("H*", $offset);
-          $offlen = chr(strlen($offset));
-          $patch = "";
-          while($srcfile[$pointer] != $modfile[$pointer]) {
-            $patch.= $modfile[$pointer];
-            $pointer++;
+    if(strlen($srcfile)<=strlen($modfile)) {
+      while($pointer<strlen($srcfile)) {
+        $src_chunk = substr($srcfile, $pointer, 0x200);
+        $mod_chunk = substr($modfile, $pointer, 0x200);
+        if($src_chunk != $mod_chunk) {
+          if($srcfile[$pointer] != $modfile[$pointer]) {
+            $offset = dechex($pointer);
+            if(strlen($offset) % 2 != 0)
+              $offset = pack("H*", str_pad($offset, strlen($offset)+1, "0", STR_PAD_LEFT));
+            else
+             $offset = pack("H*", $offset);
+            $offlen = chr(strlen($offset));
+            $patch = "";
+            while($srcfile[$pointer] != $modfile[$pointer]) {
+              $patch.= $modfile[$pointer];
+              $pointer++;
+            }
+            $length = dechex(strlen($patch));
+            if(strlen($length) % 2 != 0)
+              $length = pack("H*", str_pad($length, strlen($length)+1, "0", STR_PAD_LEFT));
+            else
+              $length = pack("H*", $length);
+            $lenlen = chr(strlen($length));
+            $running_patch.= $offlen . $offset . $lenlen . $length . $patch;
           }
-          $length = dechex(strlen($patch));
-          if(strlen($length) % 2 != 0)
-            $length = pack("H*", str_pad($length, strlen($length)+1, "0", STR_PAD_LEFT));
           else
-            $length = pack("H*", $length);
-          $lenlen = chr(strlen($length));
-          $running_patch.= $offlen . $offset . $lenlen . $length . $patch;
+            $pointer++;
         }
         else
-          $pointer++;
+          $pointer = $pointer + 0x200;
       }
-      else
-        $pointer = $pointer + 0x200;
+      if(strlen($modfile)>strlen($srcfile)) {
+        $offset = dechex($pointer);
+        if(strlen($offset) % 2 != 0)
+          $offset = pack("H*", str_pad($offset, strlen($offset)+1, "0", STR_PAD_LEFT));
+        else
+          $offset = pack("H*", $offset);
+        $offlen = chr(strlen($offset));
+        $patch = substr($modfile, $pointer, (strlen($modfile)-$pointer));
+        $length = dechex(strlen($patch));
+        if(strlen($length) % 2 != 0)
+          $length = pack("H*", str_pad($length, strlen($length)+1, "0", STR_PAD_LEFT));
+        else
+          $length = pack("H*", $length);
+        $lenlen = chr(strlen($length));
+        $running_patch.= $offlen . $offset . $lenlen . $length . $patch;
+      }
     }
-    if(strlen($modfile)>strlen($srcfile)) {
-      $offset = dechex($pointer);
-      if(strlen($offset) % 2 != 0)
-        $offset = pack("H*", str_pad($offset, strlen($offset)+1, "0", STR_PAD_LEFT));
-      else
-        $offset = pack("H*", $offset);
-      $offlen = chr(strlen($offset));
-      $patch = substr($modfile, $pointer, (strlen($modfile)-$pointer));
-      $length = dechex(strlen($patch));
-      if(strlen($length) % 2 != 0)
-        $length = pack("H*", str_pad($length, strlen($length)+1, "0", STR_PAD_LEFT));
-      else
-        $length = pack("H*", $length);
-      $lenlen = chr(strlen($length));
-      $running_patch.= $offlen . $offset . $lenlen . $length . $patch;
+    else {
+      while($pointer<strlen($modfile)) {
+        $src_chunk = substr($srcfile, $pointer, 0x200);
+        $mod_chunk = substr($modfile, $pointer, 0x200);
+        if($src_chunk != $mod_chunk) {
+          if($srcfile[$pointer] != $modfile[$pointer]) {
+            $offset = dechex($pointer);
+            if(strlen($offset) % 2 != 0)
+              $offset = pack("H*", str_pad($offset, strlen($offset)+1, "0", STR_PAD_LEFT));
+            else
+             $offset = pack("H*", $offset);
+            $offlen = chr(strlen($offset));
+            $patch = "";
+            while($srcfile[$pointer] != $modfile[$pointer]) {
+              $patch.= $modfile[$pointer];
+              $pointer++;
+            }
+            $length = dechex(strlen($patch));
+            if(strlen($length) % 2 != 0)
+              $length = pack("H*", str_pad($length, strlen($length)+1, "0", STR_PAD_LEFT));
+            else
+              $length = pack("H*", $length);
+            $lenlen = chr(strlen($length));
+            $running_patch.= $offlen . $offset . $lenlen . $length . $patch;
+          }
+          else
+            $pointer++;
+        }
+        else
+          $pointer = $pointer + 0x200;
+      }
+      if(strlen($modfile)<strlen($srcfile)) {
+        $offset = dechex($pointer);
+        if(strlen($offset) % 2 != 0)
+          $offset = pack("H*", str_pad($offset, strlen($offset)+1, "0", STR_PAD_LEFT));
+        else
+          $offset = pack("H*", $offset);
+        //$offlen = chr(strlen($offset));
+        //$patch = substr($modfile, $pointer, (strlen($modfile)-$pointer));
+        //$length = dechex(strlen($patch));
+        //if(strlen($length) % 2 != 0)
+        //  $length = pack("H*", str_pad($length, strlen($length)+1, "0", STR_PAD_LEFT));
+        //else
+        //  $length = pack("H*", $length);
+        //$lenlen = chr(strlen($length));
+        $running_patch.= chr(0) . chr(1) . $offset;
+      }
     }
+    
     print " done!\nWriting patch to $outfile...\n";
     $fo = fopen($outfile, "wb");
     if($compressed == 1)
@@ -426,54 +529,107 @@ function binarypatch($format, $source, $modified, $outfile, $compressed) {
     $pointer = 0;
     $running_patch = "";
     print "Creating the patch...";
-    while($pointer<filesize($source)) {
-      $src_chunk = fread($source_stream, 0x200);
-      $mod_chunk = fread($modified_stream, 0x200);
-      if($src_chunk != $mod_chunk) {
-      	$chunkpoint = 0;
-        while($chunkpoint < strlen($src_chunk)) {
-          if($src_chunk[$chunkpoint] != $mod_chunk[$chunkpoint]) {
-            $offset = dechex($pointer+$chunkpoint);
-            if(strlen($offset) % 2 != 0)
-              $offset = pack("H*", str_pad($offset, strlen($offset)+1, "0", STR_PAD_LEFT));
-            else
-              $offset = pack("H*", $offset);
-            $offlen = chr(strlen($offset));
-            $patch = "";
-            while($src_chunk[$chunkpoint] != $mod_chunk[$chunkpoint]) {
-              $patch.= $mod_chunk[$chunkpoint];
-              $chunkpoint++;
+    if(strlen($srcfile)<=strlen($modfile)) {
+      while($pointer<filesize($source)) {
+        $src_chunk = fread($source_stream, 0x200);
+        $mod_chunk = fread($modified_stream, 0x200);
+        if($src_chunk != $mod_chunk) {
+      	  $chunkpoint = 0;
+          while($chunkpoint < strlen($src_chunk)) {
+            if($src_chunk[$chunkpoint] != $mod_chunk[$chunkpoint]) {
+              $offset = dechex($pointer+$chunkpoint);
+              if(strlen($offset) % 2 != 0)
+                $offset = pack("H*", str_pad($offset, strlen($offset)+1, "0", STR_PAD_LEFT));
+              else
+                $offset = pack("H*", $offset);
+              $offlen = chr(strlen($offset));
+              $patch = "";
+              while($src_chunk[$chunkpoint] != $mod_chunk[$chunkpoint]) {
+                $patch.= $mod_chunk[$chunkpoint];
+                $chunkpoint++;
+              }
+              $length = dechex(strlen($patch));
+              if(strlen($length) % 2 != 0)
+                $length = pack("H*", str_pad($length, strlen($length)+1, "0", STR_PAD_LEFT));
+              else
+                $length = pack("H*", $length);
+              $lenlen = chr(strlen($length));
+              $running_patch.= $offlen . $offset . $lenlen . $length . $patch;
             }
-            $length = dechex(strlen($patch));
-            if(strlen($length) % 2 != 0)
-              $length = pack("H*", str_pad($length, strlen($length)+1, "0", STR_PAD_LEFT));
             else
-              $length = pack("H*", $length);
-            $lenlen = chr(strlen($length));
-            $running_patch.= $offlen . $offset . $lenlen . $length . $patch;
+              $chunkpoint++;
           }
-          else
-            $chunkpoint++;
         }
+        else
+          $pointer = $pointer + 0x200;
       }
-      else
-        $pointer = $pointer + 0x200;
+      if(filesize($modified)>filesize($source)) {
+        $offset = dechex($pointer);
+        if(strlen($offset) % 2 != 0)
+          $offset = pack("H*", str_pad($offset, strlen($offset)+1, "0", STR_PAD_LEFT));
+        else
+          $offset = pack("H*", $offset);
+        $offlen = chr(strlen($offset));
+        $patch = fread($modified_stream, filesize($modified)-$pointer);
+        $length = dechex(strlen($patch));
+        if(strlen($length) % 2 != 0)
+          $length = pack("H*", str_pad($length, strlen($length)+1, "0", STR_PAD_LEFT));
+        else
+          $length = pack("H*", $length);
+        $lenlen = chr(strlen($length));
+        $running_patch.= $offlen . $offset . $lenlen . $length . $patch;
+      }
     }
-    if(filesize($modified)>filesize($source)) {
-      $offset = dechex($pointer);
-      if(strlen($offset) % 2 != 0)
-        $offset = pack("H*", str_pad($offset, strlen($offset)+1, "0", STR_PAD_LEFT));
-      else
-        $offset = pack("H*", $offset);
-      $offlen = chr(strlen($offset));
-      $patch = fread($modified_stream, filesize($modified)-$pointer);
-      $length = dechex(strlen($patch));
-      if(strlen($length) % 2 != 0)
-        $length = pack("H*", str_pad($length, strlen($length)+1, "0", STR_PAD_LEFT));
-      else
-        $length = pack("H*", $length);
-      $lenlen = chr(strlen($length));
-      $running_patch.= $offlen . $offset . $lenlen . $length . $patch;
+    else {
+      while($pointer<filesize($modified)) {
+        $src_chunk = fread($source_stream, 0x200);
+        $mod_chunk = fread($modified_stream, 0x200);
+        if($src_chunk != $mod_chunk) {
+      	  $chunkpoint = 0;
+          while($chunkpoint < strlen($src_chunk)) {
+            if($src_chunk[$chunkpoint] != $mod_chunk[$chunkpoint]) {
+              $offset = dechex($pointer+$chunkpoint);
+              if(strlen($offset) % 2 != 0)
+                $offset = pack("H*", str_pad($offset, strlen($offset)+1, "0", STR_PAD_LEFT));
+              else
+                $offset = pack("H*", $offset);
+              $offlen = chr(strlen($offset));
+              $patch = "";
+              while($src_chunk[$chunkpoint] != $mod_chunk[$chunkpoint]) {
+                $patch.= $mod_chunk[$chunkpoint];
+                $chunkpoint++;
+              }
+              $length = dechex(strlen($patch));
+              if(strlen($length) % 2 != 0)
+                $length = pack("H*", str_pad($length, strlen($length)+1, "0", STR_PAD_LEFT));
+              else
+                $length = pack("H*", $length);
+              $lenlen = chr(strlen($length));
+              $running_patch.= $offlen . $offset . $lenlen . $length . $patch;
+            }
+            else
+              $chunkpoint++;
+          }
+        }
+        else
+          $pointer = $pointer + 0x200;
+      }
+      if(filesize($modified)>filesize($source)) {
+        $offset = dechex($pointer);
+        if(strlen($offset) % 2 != 0)
+          $offset = pack("H*", str_pad($offset, strlen($offset)+1, "0", STR_PAD_LEFT));
+        else
+          $offset = pack("H*", $offset);
+        $offlen = chr(strlen($offset));
+        $patch = fread($modified_stream, filesize($modified)-$pointer);
+        $length = dechex(strlen($patch));
+        if(strlen($length) % 2 != 0)
+          $length = pack("H*", str_pad($length, strlen($length)+1, "0", STR_PAD_LEFT));
+        else
+          $length = pack("H*", $length);
+        $lenlen = chr(strlen($length));
+        $running_patch.= $offlen . $offset . $lenlen . $length . $patch;
+      }
     }
     fclose($source_stream);
     fclose($modified_stream);
@@ -487,6 +643,7 @@ function binarypatch($format, $source, $modified, $outfile, $compressed) {
   print "All done!\n";
   exit;
 }
+
 
 // Function for using a textual patch
 function rup_text_patch($infile, $outfile, $compressed) {
@@ -528,7 +685,7 @@ function rup_text_patch($infile, $outfile, $compressed) {
     $readfile = fopen($outfile . ".bak", "rb");
     $filesize = filesize($outfile . ".bak");
     if($filesize>0x1e00000) {
-      print "File too large to test\nTaking a 30MB sample...\n";
+      print "The file is too large to test, taking a 30MB sample...\n";
       $sample = fread($readfile, 0x1400000);
       fseek($readfile, ($filesize - 0xa00000), SEEK_SET);
       $sample.= fread($readfile, 0xa00000) . $filesize;
@@ -584,15 +741,21 @@ function rup_text_patch($infile, $outfile, $compressed) {
   if(isset($sample)) {
     for($i=1; $i<$patch_count; $i++) {
       list($offset, $patch) = preg_split("/ /", $patch_lines[$i]);
-      $decoff = hexdec($offset);
-      if($pointer<$decoff){
-        fputs($fo, substr($sample, $pointer, $decoff-$pointer));
-        $pointer = $decoff;
+      if($offset != "cut") {
+        $decoff = hexdec($offset);
+        if($pointer<$decoff){
+          fputs($fo, substr($sample, $pointer, $decoff-$pointer));
+          $pointer = $decoff;
+        }
+        fputs($fo, pack("H*", $patch));
+        $pointer = $pointer + (strlen($patch)/2);
       }
-      fputs($fo, pack("H*", $patch));
-      $pointer = $pointer + (strlen($patch)/2);
+      else
+        $cutpoint = hexdec($patch);
     }
-    if($pointer<strlen($sample))
+    if(isset($cutpoint))
+      fputs($fo, substr($sample, $pointer, $cutpoint-$pointer));
+    elseif($pointer<strlen($sample))
       fputs($fo, substr($sample, $pointer, strlen($sample)-$pointer));
     fclose($fd);
     fclose($fo);
@@ -609,16 +772,24 @@ function rup_text_patch($infile, $outfile, $compressed) {
   else {
     for($i=1; $i<$patch_count; $i++) {
       list($offset, $patch) = preg_split("/ /", $patch_lines[$i]);
-      $decoff = hexdec($offset);
-      if($pointer<$decoff){
-      	fseek($fd, $pointer);
-        fputs($fo, fread($fd, $decoff-$pointer));
-        $pointer=$decoff;
+      if($offset != "cut") {
+        $decoff = hexdec($offset);
+        if($pointer<$decoff){
+          fseek($fd, $pointer);
+          fputs($fo, fread($fd, $decoff-$pointer));
+          $pointer=$decoff;
+        }
+        fputs($fo, pack("H*", $patch));
+        $pointer = $pointer + (strlen($patch)/2);
       }
-      fputs($fo, pack("H*", $patch));
-      $pointer = $pointer + (strlen($patch)/2);
+      else
+        $cutpoint = hexdec($patch);
     }
-    if($pointer<filesize($outfile . ".bak")-$fileoff) {
+    if(isset($cutpoint)) {
+      fseek($fd, $pointer);
+      fputs($fo, fread($fd, $cutpoint-$pointer));
+    }
+    elseif($pointer<filesize($outfile . ".bak")-$fileoff) {
       fseek($fd, $pointer);
       fputs($fo, fread($fd, filesize($outfile . ".bak")-$pointer));
     }
@@ -636,6 +807,7 @@ function rup_text_patch($infile, $outfile, $compressed) {
   }
   exit;
 }
+
 
 // Function for using a binary patch
 function rup_bin_patch($infile, $outfile, $compressed) {
@@ -815,27 +987,23 @@ function rup_bin_patch($infile, $outfile, $compressed) {
   exit;
 }
 
+
 // Function for using an IPS patch
 function ips_patch($infile, $outfile) {
   $patch = fopen($infile, "rb");
   fseek($patch, 5, SEEK_SET);
   print "Opening $outfile for patching...\n";
-  rename($outfile, $outfile . ".bak");
-  $fd = fopen($outfile . ".bak", "rb");
-  $fo = fopen($outfile, "x");
+  $fd = fopen($outfile, "rb");
+  $fddump = fread($fd, filesize($outfile));
   print "Beginning patching...\n";
   $all_your_base = 0;
   $pointer = 0;
-  $filesize = filesize($outfile . ".bak");
+  $filesize = filesize($outfile);
   while($all_your_base != 1) {
     $temp = fread($patch, 3);
     if($temp != "EOF") {
       $offset = hexdec(bin2hex($temp));
-      if($pointer<$offset) {
-        fseek($fd, $pointer, SEEK_SET);
-        fputs($fo, fread($fd, $offset-$pointer));
-        $pointer = $offset;
-      }
+      $tempfile = substr($fddump, 0, $offset);
       $length = hexdec(bin2hex(fread($patch, 2)));
       if($length==0) {
         //Oh fuck, it's RLE time...
@@ -844,45 +1012,82 @@ function ips_patch($infile, $outfile) {
         $rle_expand = "";
         for($rle_count=0; $rle_count<$rle_length; $rle_count++) {
           $rle_expand.= $rle_char;
-          $pointer++;
         }
-        fputs($fo, $rle_expand);
+        $tempfile.= $rle_expand;
         unset($rle_char, $rle_expand, $rle_length, $rle_count);
       }
       else {
-        fputs($fo, fread($patch, $length));
-        $pointer += $length;
+        $tempfile.= fread($patch, $length);
       }
+      $tempfile.= substr($fddump, strlen($tempfile));
+      $fddump = $tempfile;
     }
     else
       $all_your_base = 1;
       // The victor is Cats
   }
-  if($pointer<$filesize) {
-    fseek($fd, $pointer, SEEK_SET);
-    fputs($fo, fread($fd, $filesize-$pointer));
+  unset($tempfile);
+  //Add support for LunarIPS cut
+  if(ftell($patch)<filesize($infile)) {
+    $offset = hexdec(bin2hex(fread($patch, 3)));
+    print "Cutting at 0x" . dechex($offset) . "...\n";
+    $fddump = substr($fddump, 0, $offset);
   }
   fclose($fd);
   fclose($patch);
-  print "Patching complete!\nYour original file has been moved to:\n> $outfile.bak\nDo you wish to delete it? (Y/N) ";
+  print "Patching complete!\nWould you like to keep a backup of the original file? (Y/N) ";
   $value = consoleread();
   while((strtolower($value) != "y")&&(strtolower($value) != "n")) {
     print "Invalid input! ";
     $value = consoleread();
   }
   if(strtolower($value) == "y")
-    unlink($outfile . ".bak");
+    rename($outfile, $outfile . ".bak");
+  $fo = fopen($outfile, "wb");
+  fputs($fo, $fddump);
   print "All done!\n";
   fclose($fo);
   exit;
 }
 
-function consoleread($length='10') {
-  if (!isset ($GLOBALS['StdinPointer']))
-    $GLOBALS['StdinPointer'] = fopen("php://stdin", "r");
-  $line = fgets($GLOBALS['StdinPointer'],$length);
-  return trim($line);
+
+// Read in a Megadrive ROM
+function mega_read($infile) {
+  $fd = fopen($infile, "rb");
+  fseek($fd, 0x100, SEEK_SET);
+  if(fread($fd, 4) == "SEGA") {
+    print "File appears to be in BIN format already...\n";
+    fseek($fd, 0, SEEK_SET);
+    return(array(fread($fd, filesize($infile)), 0));
+  }
+  fseek($fd, 0x8, SEEK_SET);
+  if(bin2hex(fread($fd, 2)) == "AABB") {
+    print "File appears to be in SMD format...\nConverting to BIN... ";
+    fseek($fd, 0x200, SEEK_SET);
+    $num_blocks = (filesize($infile)-0x200)/(0x4000);
+    $output = "";
+    for($i=0; $i<$num_blocks; $i++) {
+      $output.= smd_deinterleave(fread($fd, 0x4000));
+    }
+    return(array($output, 0x200));
+  }
+  else
+    die(print "ERROR: Invalid Genesis ROM!\n");
 }
+
+
+// Read in a Game Boy ROM
+function gb_read($infile) {
+  $fd = fopen($infile, "rb");
+  // Test for an 0x200 SmartCard header
+  if((filesize($infile) % 0x4000) != 0) {
+    fseek($fd, 0x200, SEEK_SET);
+    return(array(fread($fd, (filesize($infile)-0x200)), 0x200));
+  }
+  else
+    return(array(fread($fd, (filesize($infile))), 0));
+}
+
 
 // Read in a SNES ROM
 function snes_read($infile) {
@@ -1058,41 +1263,6 @@ function snes_read($infile) {
     return(array(fread($fd, (filesize($infile))), 0));
 }
 
-// Read in a Megadrive ROM
-function mega_read($infile) {
-  $fd = fopen($infile, "rb");
-  fseek($fd, 0x100, SEEK_SET);
-  if(fread($fd, 4) == "SEGA") {
-    print "File appears to be in BIN format already...\n";
-    fseek($fd, 0, SEEK_SET);
-    return(array(fread($fd, filesize($infile)), 0));
-  }
-  fseek($fd, 0x8, SEEK_SET);
-  if(bin2hex(fread($fd, 2)) == "AABB") {
-    print "File appears to be in SMD format...\nConverting to BIN... ";
-    fseek($fd, 0x200, SEEK_SET);
-    $num_blocks = (filesize($infile)-0x200)/(0x4000);
-    $output = "";
-    for($i=0; $i<$num_blocks; $i++) {
-      $output.= smd_deinterleave(fread($fd, 0x4000));
-    }
-    return(array($output, 0x200));
-  }
-  else
-    die(print "ERROR: Invalid Genesis ROM!\n");
-}
-
-// Read in a Game Boy ROM
-function gb_read($infile) {
-  $fd = fopen($infile, "rb");
-  // Test for an 0x200 SmartCard header
-  if((filesize($infile) % 0x4000) != 0) {
-    fseek($fd, 0x200, SEEK_SET);
-    return(array(fread($fd, (filesize($infile)-0x200)), 0x200));
-  }
-  else
-    return(array(fread($fd, (filesize($infile))), 0));
-}
 
 // Deinterleaves a 16KB block of SMD data   
 function smd_deinterleave($chunk) {
@@ -1108,11 +1278,13 @@ function smd_deinterleave($chunk) {
   return($block);
 }
 
+
 // Split a byte to high and low nibbles
 function hilo_nibble($byte) {
   $bytestr = bin2hex($byte);
   return(array(hexdec(substr($bytestr, 0, 1)), hexdec(substr($bytestr, 1, 1))));
 }
+
 
 // Show options if input is missing
 function DisplayOptions() {
@@ -1137,6 +1309,22 @@ Create a textual patch (use -tz for a compressed patch):
 Please see readme.txt for a complete list of supported game formats.
 
 OPTIONS;
+}
+
+
+// Gets time since the epoch for speed clocking
+function getmicrotime(){ 
+  list($usec, $sec) = explode(" ",microtime()); 
+  return ((float)$usec + (float)$sec); 
+}
+
+
+// Reads user input from the text console
+function consoleread($length='10') {
+  if (!isset ($GLOBALS['StdinPointer']))
+    $GLOBALS['StdinPointer'] = fopen("php://stdin", "r");
+  $line = fgets($GLOBALS['StdinPointer'],$length);
+  return trim($line);
 }
 
 ?>

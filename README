@@ -1,8 +1,10 @@
-NINJA 1.01 (cli)
-Copyright (c) Derrick Sobodash 2004, 2012
+NINJA 1.2 (cli)
+Copyright (c) Derrick Sobodash 2004, 2017
 
 
 HISTORY
+
+ 1.2: Unknown bug fix, found this update in an old backup disk
 
 1.01: Fixed binary patching to interprest a value of 0 as no known
       CRC32/MD5/SHA1. It was in the specs but mistakenly passed over.
